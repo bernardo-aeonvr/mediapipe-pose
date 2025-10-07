@@ -17,7 +17,6 @@
         padding: 12px;
         box-sizing: border-box;
       }
-      .controls { display: flex; gap: 8px; margin-bottom: 12px; }
 
       /* Stage: vídeo + canvas sobrepostos */
       .stage {
@@ -55,7 +54,6 @@
       #liveView:-webkit-full-screen video,
       #liveView:-webkit-full-screen canvas {
         width: 100vw !important; height: 100vh !important; object-fit: cover;
-        /* 👇 não resetar transform aqui */
       }
 
       /* Soft fullscreen (iOS fallback) — também mantém transform */
@@ -70,7 +68,6 @@
       #liveView.soft-fs video,
       #liveView.soft-fs canvas {
         width: 100vw !important; height: 100vh !important; object-fit: cover;
-        /* 👇 não resetar transform aqui */
       }
     </style>
   </head>
@@ -78,107 +75,15 @@
   <body>
     <!-- Copyright 2023 The MediaPipe Authors. Apache 2.0 -->
 
-    <!-- Adicione 'mirrored' aqui para espelhar sempre -->
+    <!-- 'mirrored' deixa sempre espelhado -->
     <div id="liveView" class="videoView mirrored">
-      <div class="controls">
-        <button id="webcamButton" class="mdc-button mdc-button--raised">
-          <span class="mdc-button__ripple"></span>
-          <span class="mdc-button__label">ENABLE WEBCAM</span>
-        </button>
-
-        <button id="fsButton" class="mdc-button mdc-button--outlined" aria-pressed="false" title="Fullscreen">
-          <span class="mdc-button__ripple"></span>
-          <span class="mdc-button__label">Fullscreen</span>
-        </button>
-      </div>
-
       <div class="stage">
         <video id="webcam" autoplay playsinline muted></video>
         <canvas class="output_canvas" id="output_canvas" width="1280" height="720"></canvas>
       </div>
     </div>
 
-    <!-- Seu script de MediaPipe -->
+    <!-- Seu script com MediaPipe + fullscreen + auto-start -->
     <script type="module" src="./script.js"></script>
-
-    <!-- Botão Fullscreen + correções -->
-    <script>
-      window.addEventListener('DOMContentLoaded', () => {
-        const liveView = document.getElementById('liveView');
-        const fsBtn = document.getElementById('fsButton');
-        const videoEl = document.getElementById('webcam');
-
-        // Garantias para iOS
-        videoEl.setAttribute('playsinline', '');
-        videoEl.setAttribute('muted', '');
-
-        const isNativeFS = () =>
-          document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement;
-
-        const canElemFS = !!(liveView.requestFullscreen || liveView.webkitRequestFullscreen || liveView.msRequestFullscreen);
-
-        async function enterFS(el) {
-          if (el.requestFullscreen) return el.requestFullscreen();
-          if (el.webkitRequestFullscreen) return el.webkitRequestFullscreen();
-          if (el.msRequestFullscreen) return el.msRequestFullscreen();
-        }
-        async function exitFS() {
-          if (document.exitFullscreen) return document.exitFullscreen();
-          if (document.webkitExitFullscreen) return document.webkitExitFullscreen();
-          if (document.msExitFullscreen) return document.msExitFullscreen();
-        }
-
-        function setSoftFS(on) {
-          liveView.classList.toggle('soft-fs', on);
-          updateBtn(on || !!isNativeFS());
-        }
-
-        function updateBtn(full) {
-          const label = fsBtn.querySelector('.mdc-button__label');
-          if (full) {
-            fsBtn.classList.add('mdc-button--raised');
-            fsBtn.classList.remove('mdc-button--outlined');
-            fsBtn.setAttribute('aria-pressed', 'true');
-            label.textContent = 'Exit Fullscreen';
-          } else {
-            fsBtn.classList.remove('mdc-button--raised');
-            fsBtn.classList.add('mdc-button--outlined');
-            fsBtn.setAttribute('aria-pressed', 'false');
-            label.textContent = 'Fullscreen';
-          }
-        }
-
-        // Mantém UI sincronizada; NÃO removemos 'mirrored'
-        ['fullscreenchange', 'webkitfullscreenchange', 'MSFullscreenChange'].forEach(evt => {
-          document.addEventListener(evt, () => updateBtn(!!isNativeFS()));
-        });
-
-        fsBtn.addEventListener('click', async () => {
-          try {
-            const nfs = !!isNativeFS();
-            const softOn = liveView.classList.contains('soft-fs');
-
-            if (nfs || softOn) {
-              if (nfs) await exitFS();
-              if (softOn) setSoftFS(false);
-              updateBtn(false);
-              return;
-            }
-
-            // Entrar
-            if (canElemFS && (document.fullscreenEnabled || document.webkitFullscreenEnabled)) {
-              await enterFS(liveView);
-              updateBtn(true);
-            } else {
-              // Fallback iOS sem usar webkitEnterFullscreen() no <video>
-              setSoftFS(true);
-            }
-          } catch (e) {
-            console.error(e);
-            setSoftFS(true);
-          }
-        });
-      });
-    </script>
   </body>
 </html>
