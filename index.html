@@ -146,8 +146,6 @@
 
         ['fullscreenchange', 'webkitfullscreenchange', 'MSFullscreenChange'].forEach(evt => {
           document.addEventListener(evt, () => {
-            // Em fullscreen, nunca espelhar
-            if (isNativeFS()) liveView.classList.remove('mirrored');
             updateBtn(!!isNativeFS());
           });
         });
@@ -167,7 +165,6 @@
             // entrar
             if (canElemFS && (document.fullscreenEnabled || document.webkitFullscreenEnabled)) {
               await enterFS(liveView);
-              liveView.classList.remove('mirrored'); // sem espelho em FS
               updateBtn(true);
             } else {
               // fallback iOS: sem usar webkitEnterFullscreen() no <video>
