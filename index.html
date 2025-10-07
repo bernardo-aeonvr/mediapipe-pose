@@ -1,123 +1,102 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>MediaPipe Pose Landmarker Task for web</title>
-    <link rel="stylesheet" href="./style.css" />
-    <link href="https://unpkg.com/material-components-web@latest/dist/material-components-web.min.css" rel="stylesheet" />
-    <script src="https://unpkg.com/material-components-web@latest/dist/material-components-web.min.js"></script>
+<!-- Substitua APENAS o JS do botão Fullscreen por este bloco -->
+<script>
+  const liveView = document.getElementById('liveView');
+  const fsBtn = document.getElementById('fsButton');
+  const videoEl = document.getElementById('webcam');
 
-    <style>
-      /* Ajustes quando entrar em fullscreen */
-      #liveView:fullscreen,
-      #liveView:-webkit-full-screen {
-        width: 100vw;
-        height: 100vh;
-        background: #000;
+  // Se você estava aplicando transform direto, mova para uma classe opcional:
+  // liveView.classList.add('mirrored'); // use só fora do fullscreen se quiser espelho
+
+  const isNativeFullscreen = () =>
+    document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement;
+
+  const canRequestElementFS =
+    !!(liveView.requestFullscreen || liveView.webkitRequestFullscreen || liveView.msRequestFullscreen);
+
+  async function enterFullscreen(el) {
+    if (el.requestFullscreen) return el.requestFullscreen();
+    if (el.webkitRequestFullscreen) return el.webkitRequestFullscreen(); // Safari moderno
+    if (el.msRequestFullscreen) return el.msRequestFullscreen();
+  }
+  async function exitFullscreen() {
+    if (document.exitFullscreen) return document.exitFullscreen();
+    if (document.webkitExitFullscreen) return document.webkitExitFullscreen();
+    if (document.msExitFullscreen) return document.msExitFullscreen();
+  }
+
+  function enableSoftFS(on) {
+    liveView.classList.toggle('soft-fs', on);
+    updateFsButtonUI(on || !!isNativeFullscreen());
+  }
+
+  function updateFsButtonUI(full) {
+    const label = fsBtn.querySelector('.mdc-button__label');
+    if (full) {
+      fsBtn.classList.add('mdc-button--raised');
+      fsBtn.classList.remove('mdc-button--outlined');
+      fsBtn.setAttribute('aria-pressed', 'true');
+      label.textContent = 'Exit Fullscreen';
+    } else {
+      fsBtn.classList.remove('mdc-button--raised');
+      fsBtn.classList.add('mdc-button--outlined');
+      fsBtn.setAttribute('aria-pressed', 'false');
+      label.textContent = 'Fullscreen';
+    }
+  }
+
+  // Sincroniza UI quando sai pelo ESC/gesto
+  ['fullscreenchange', 'webkitfullscreenchange', 'MSFullscreenChange'].forEach((evt) => {
+    document.addEventListener(evt, () => {
+      // Garantir que não fique “espelhado” em fullscreen
+      if (isNativeFullscreen()) {
+        liveView.classList.remove('mirrored');
       }
-      #liveView:fullscreen video,
-      #liveView:fullscreen canvas,
-      #liveView:-webkit-full-screen video,
-      #liveView:-webkit-full-screen canvas {
-        width: 100vw !important;
-        height: 100vh !important;
-        object-fit: cover;
-      }
-      .controls {
-        display: flex;
-        gap: 8px;
-        margin-bottom: 12px;
-      }
-    </style>
-  </head>
+      updateFsButtonUI(!!isNativeFullscreen());
+    });
+  });
 
-  <body>
-    <!-- Copyright 2023 The MediaPipe Authors. Apache 2.0 -->
-    <div id="liveView" class="videoView">
-      <div class="controls">
-        <button id="webcamButton" class="mdc-button mdc-button--raised">
-          <span class="mdc-button__ripple"></span>
-          <span class="mdc-button__label">ENABLE WEBCAM</span>
-        </button>
+  // Ajusta em mudanças de orientação para manter o cover
+  window.addEventListener('orientationchange', () => {
+    // Nada específico aqui além do CSS (object-fit: cover),
+    // mas este hook evita reflows inesperados.
+    setTimeout(() => {}, 0);
+  });
 
-        <!-- BOTÃO FULLSCREEN -->
-        <button id="fsButton" class="mdc-button mdc-button--outlined" aria-pressed="false" title="Fullscreen">
-          <span class="mdc-button__ripple"></span>
-          <span class="mdc-button__label">Fullscreen</span>
-        </button>
-      </div>
+  fsBtn.addEventListener('click', async () => {
+    try {
+      const nfs = !!isNativeFullscreen();
+      const softOn = liveView.classList.contains('soft-fs');
 
-      <div style="position: relative;">
-        <video id="webcam" style="width: 1280px; height: 720px; position: absolute; left:0; top:0;" autoplay playsinline></video>
-        <canvas class="output_canvas" id="output_canvas" width="1280" height="720" style="position: absolute; left: 0; top: 0;"></canvas>
-      </div>
-    </div>
-
-    <script type="module" src="./script.js"></script>
-
-    <!-- JS do botão Fullscreen -->
-    <script>
-      const liveView = document.getElementById('liveView');
-      const fsBtn = document.getElementById('fsButton');
-      const videoEl = document.getElementById('webcam');
-
-      const isFullscreen = () =>
-        document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement;
-
-      async function enterFullscreen(el) {
-        if (el.requestFullscreen) return el.requestFullscreen();
-        if (el.webkitRequestFullscreen) return el.webkitRequestFullscreen(); // Safari
-        if (el.msRequestFullscreen) return el.msRequestFullscreen(); // IE/Edge antigo
-      }
-
-      async function exitFullscreen() {
-        if (document.exitFullscreen) return document.exitFullscreen();
-        if (document.webkitExitFullscreen) return document.webkitExitFullscreen(); // Safari
-        if (document.msExitFullscreen) return document.msExitFullscreen();
-      }
-
-      function updateFsButtonUI(full) {
-        const label = fsBtn.querySelector('.mdc-button__label');
-        if (full) {
-          fsBtn.classList.add('mdc-button--raised');
-          fsBtn.classList.remove('mdc-button--outlined');
-          fsBtn.setAttribute('aria-pressed', 'true');
-          label.textContent = 'Exit Fullscreen';
-        } else {
-          fsBtn.classList.remove('mdc-button--raised');
-          fsBtn.classList.add('mdc-button--outlined');
-          fsBtn.setAttribute('aria-pressed', 'false');
-          label.textContent = 'Fullscreen';
-        }
+      if (nfs || softOn) {
+        // Sair de qualquer modo de fullscreen
+        if (nfs) await exitFullscreen();
+        if (softOn) enableSoftFS(false);
+        updateFsButtonUI(false);
+        return;
       }
 
-      // Mantém o texto do botão sincronizado se o usuário sair pelo ESC
-      ['fullscreenchange', 'webkitfullscreenchange', 'MSFullscreenChange'].forEach((evt) => {
-        document.addEventListener(evt, () => updateFsButtonUI(!!isFullscreen()));
-      });
+      // ENTRAR em fullscreen
+      // 1) Tente fullscreen do container (mantém vídeo/canvas no DOM)
+      if (canRequestElementFS && (document.fullscreenEnabled || document.webkitFullscreenEnabled)) {
+        await enterFullscreen(liveView);
+        // Evita espelho no modo fullscreen
+        liveView.classList.remove('mirrored');
+        updateFsButtonUI(true);
+        return;
+      }
 
-      fsBtn.addEventListener('click', async () => {
-        try {
-          if (!isFullscreen()) {
-            // Tenta fullscreen do container
-            const supported =
-              liveView.requestFullscreen || liveView.webkitRequestFullscreen || liveView.msRequestFullscreen;
+      // 2) Fallback: "soft fullscreen" (NÃO chamar video.webkitEnterFullscreen!)
+      enableSoftFS(true);
 
-            if (supported) {
-              await enterFullscreen(liveView);
-            } else if (videoEl && videoEl.webkitEnterFullscreen) {
-              // Fallback: iOS antigo só permite fullscreen no <video>
-              videoEl.webkitEnterFullscreen();
-            }
-            updateFsButtonUI(true);
-          } else {
-            await exitFullscreen();
-            updateFsButtonUI(false);
-          }
-        } catch (err) {
-          console.error('Fullscreen error:', err);
-        }
-      });
-    </script>
-  </body>
-</html>
+    } catch (err) {
+      console.error('Fullscreen toggle error:', err);
+      // Em caso de erro, caia no soft fullscreen
+      enableSoftFS(true);
+    }
+  });
+
+  // Dica extra para iOS: garanta playsinline
+  if (!videoEl.hasAttribute('playsinline')) {
+    videoEl.setAttribute('playsinline', '');
+  }
+</script>
