@@ -1,5 +1,5 @@
 // Copyright 2023 The MediaPipe Authors.
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0
 // http://www.apache.org/licenses/LICENSE-2.0
 
 import { PoseLandmarker, FilesetResolver, DrawingUtils } from "https://cdn.skypack.dev/@mediapipe/tasks-vision@0.10.0";
@@ -15,10 +15,10 @@ const videoWidth = "480px";
 /* ================================
    ⚙️ Fullscreen helpers (nativo + soft)
    ================================ */
-const liveViewFS = document.getElementById("liveView");
-const fsBtnFS   = document.getElementById("fsButton");
-const videoElFS = document.getElementById("webcam");
-const canvasElFS = document.getElementById("output_canvas");
+const liveViewFS  = document.getElementById("liveView");
+const fsBtnFS     = document.getElementById("fsButton");
+const videoElFS   = document.getElementById("webcam");
+const canvasElFS  = document.getElementById("output_canvas");
 
 // Garantias iOS para o <video>
 if (videoElFS) {
@@ -49,7 +49,6 @@ async function exitFS() {
 }
 
 function setSoftFS(on) {
-  // "Soft fullscreen" mantém vídeo/canvas no DOM e preserva MediaPipe
   if (!liveViewFS) return;
   liveViewFS.classList.toggle("soft-fs", on);
   updateFSButtonUI(on || !!isNativeFS());
@@ -72,33 +71,31 @@ function updateFSButtonUI(full) {
 }
 
 async function goFullscreenPreferred() {
-  // Preferir nativo (no container) quando disponível
+  // Preferir nativo no container
   if (liveViewFS && canElemFS && (document.fullscreenEnabled || document.webkitFullscreenEnabled)) {
     try {
       await enterFS(liveViewFS);
       updateFSButtonUI(true);
       return true;
-    } catch (_) {
-      // bloqueado -> cai no soft
-    }
+    } catch (_) { /* bloqueado -> cair para soft */ }
   }
   // Fallback (iOS/gesto obrigatório)
   setSoftFS(true);
   return true;
 }
 
-// Expor um verificador para o predictWebcam não fixar 360x480 em FS
+// Expor para o loop de render
 window.__liveViewIsFS = function () {
   if (!liveViewFS) return false;
   return thisElemIsNativeFS() || liveViewFS.classList.contains("soft-fs");
 };
 
-// Sincroniza UI quando sai por ESC/gesto do SO
+// Sincroniza UI em ESC/gesto SO
 ["fullscreenchange", "webkitfullscreenchange", "MSFullscreenChange"].forEach((evt) => {
   document.addEventListener(evt, () => updateFSButtonUI(!!isNativeFS()));
 });
 
-// Botão Fullscreen (se existir no HTML)
+// Botão Fullscreen (se existir)
 if (fsBtnFS) {
   fsBtnFS.addEventListener("click", async () => {
     const nfs = !!isNativeFS();
@@ -113,22 +110,9 @@ if (fsBtnFS) {
   });
 }
 
-// Tentar fullscreen ao carregar; se o navegador bloquear, tenta no primeiro gesto
-(async () => {
-  try { await goFullscreenPreferred(); } catch (_) { /* vai pro listener abaixo */ }
-})();
-const _activateOnGesture = async () => {
-  document.removeEventListener("click", _activateOnGesture, true);
-  document.removeEventListener("touchend", _activateOnGesture, true);
-  try { await goFullscreenPreferred(); } catch (_) { setSoftFS(true); }
-};
-document.addEventListener("click", _activateOnGesture, true);
-document.addEventListener("touchend", _activateOnGesture, true);
-
 /* ================================
    🧠 MediaPipe Pose Landmarker
    ================================ */
-// Before we can use PoseLandmarker class we must wait for it to finish loading.
 const createPoseLandmarker = async () => {
   const vision = await FilesetResolver.forVisionTasks(
     "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm"
@@ -145,6 +129,10 @@ const createPoseLandmarker = async () => {
   });
 
   demosSection?.classList?.remove("invisible");
+
+  // ⚡ AUTO-START: assim que o modelo carregar, tenta fullscreen e inicia a câmera
+  try { await goFullscreenPreferred(); } catch (_) { /* iOS pode exigir gesto */ }
+  autoStartCamera();
 };
 createPoseLandmarker();
 
@@ -164,7 +152,6 @@ async function handleClick(event) {
     runningMode = "IMAGE";
     await poseLandmarker.setOptions({ runningMode: "IMAGE" });
   }
-  // Remove desenhados anteriores
   const allCanvas = event.target.parentNode.getElementsByClassName("canvas");
   for (let i = allCanvas.length - 1; i >= 0; i--) {
     const n = allCanvas[i];
@@ -205,9 +192,9 @@ const hasGetUserMedia = () => !!navigator.mediaDevices?.getUserMedia;
 
 if (hasGetUserMedia()) {
   enableWebcamButton = document.getElementById("webcamButton");
-  enableWebcamButton.addEventListener("click", enableCam);
-  // Plus: garantir fullscreen no primeiro clique do botão da webcam, se ainda não estiver
-  enableWebcamButton.addEventListener("click", async () => {
+  enableWebcamButton?.addEventListener("click", enableCam);
+  // Gesto também tenta fullscreen se ainda não estiver
+  enableWebcamButton?.addEventListener("click", async () => {
     if (!window.__liveViewIsFS?.()) {
       try { await goFullscreenPreferred(); } catch (_) { /* ignore */ }
     }
@@ -216,8 +203,20 @@ if (hasGetUserMedia()) {
   console.warn("getUserMedia() is not supported by your browser");
 }
 
+// Inicia a câmera automaticamente (sem depender do botão)
+async function autoStartCamera() {
+  if (!poseLandmarker) return;            // espera modelo
+  if (webcamRunning) return;              // já rodando
+  try {
+    // Tenta iniciar direto; browser mostrará o prompt de permissão
+    await enableCam();
+  } catch (e) {
+    console.warn("Auto-start failed, will try on first gesture.", e);
+  }
+}
+
 // Enable the live webcam view and start detection.
-function enableCam() {
+async function enableCam() {
   if (!poseLandmarker) {
     console.log("Wait! poseLandmaker not loaded yet.");
     return;
@@ -225,23 +224,25 @@ function enableCam() {
 
   if (webcamRunning === true) {
     webcamRunning = false;
-    enableWebcamButton.innerText = "ENABLE PREDICTIONS";
+    if (enableWebcamButton) enableWebcamButton.innerText = "ENABLE PREDICTIONS";
+    return;
   } else {
     webcamRunning = true;
-    enableWebcamButton.innerText = "DISABLE PREDICTIONS";
+    if (enableWebcamButton) enableWebcamButton.innerText = "DISABLE PREDICTIONS";
   }
 
   const constraints = { video: true };
 
-  navigator.mediaDevices.getUserMedia(constraints).then((stream) => {
-    video.srcObject = stream;
-    video.addEventListener("loadeddata", predictWebcam, { once: true });
-  });
+  const stream = await navigator.mediaDevices.getUserMedia(constraints);
+  video.srcObject = stream;
+  // garante que só registre uma vez
+  video.removeEventListener("loadeddata", predictWebcam);
+  video.addEventListener("loadeddata", predictWebcam, { once: true });
 }
 
 let lastVideoTime = -1;
 async function predictWebcam() {
-  // 🔎 Em fullscreen (nativo ou soft), não force 360x480 — deixe o CSS cuidar
+  // Em fullscreen (nativo ou soft), deixe o CSS cuidar do tamanho
   const inFS = window.__liveViewIsFS?.() === true;
   if (!inFS) {
     canvasElement.style.height = videoHeight;
@@ -249,7 +250,6 @@ async function predictWebcam() {
     canvasElement.style.width = videoWidth;
     video.style.width = videoWidth;
   } else {
-    // Em fullscreen, remova tamanhos fixos para permitir 100vw/100vh via CSS
     canvasElement.style.width = "";
     canvasElement.style.height = "";
     video.style.width = "";
@@ -281,3 +281,26 @@ async function predictWebcam() {
     window.requestAnimationFrame(predictWebcam);
   }
 }
+
+/* ================================
+   🟢 Auto: tentar fullscreen e câmera ao carregar (fallback em gesto)
+   ================================ */
+(async () => {
+  // Tenta fullscreen imediatamente (pode ser bloqueado por alguns browsers)
+  try { await goFullscreenPreferred(); } catch (_) { /* ok */ }
+  // Se o modelo já tiver carregado muito rápido, tenta ligar a câmera direto.
+  autoStartCamera();
+})();
+
+// Se o navegador exigir gesto do usuário (iOS, etc.), entra fullscreen/câmera no 1º gesto
+const _activateOnGesture = async () => {
+  document.removeEventListener("click", _activateOnGesture, true);
+  document.removeEventListener("touchend", _activateOnGesture, true);
+  try { await goFullscreenPreferred(); } catch (_) { setSoftFS(true); }
+  // Se ainda não rodando, tenta iniciar a câmera
+  if (!webcamRunning) {
+    try { await enableCam(); } catch (_) {}
+  }
+};
+document.addEventListener("click", _activateOnGesture, true);
+document.addEventListener("touchend", _activateOnGesture, true);
